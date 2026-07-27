@@ -79,130 +79,208 @@ root mutable by multiple napplets MUST apply explicit policy to every mutation.
 | `pickFiles` | optional `options` (`FsPickOptions`) | `FsPickResult` | `fs.pickFiles` / `fs.pickFiles.result` |
 | `pickDirectory` | optional `options` (`FsPickOptions`) | `FsPickResult` | `fs.pickDirectory` / `fs.pickDirectory.result` |
 | `pickSaveFile` | optional `options` (`FsPickOptions`) | `FsPickResult` | `fs.pickSaveFile` / `fs.pickSaveFile.result` |
-| `stat` | `path` (`tstr`) | `FsMetadata` | `fs.stat` / `fs.stat.result` |
-| `list` | `path` (`tstr`) | list of `FsDirectoryEntry` | `fs.list` / `fs.list.result` |
-| `read` | `path` (`tstr`), optional `options` (`FsReadOptions`) | `FsReadResult` | `fs.read` / `fs.read.result` |
-| `write` | `path` (`tstr`), `data` (`bstr`), optional `options` (`FsWriteOptions`) | `FsWriteResult` | `fs.write` / `fs.write.result` |
-| `mkdir` | `path` (`tstr`), optional `options` (`FsMkdirOptions`) | none | `fs.mkdir` / `fs.mkdir.result` |
-| `remove` | `path` (`tstr`), optional `recursive` (`bool`) | none | `fs.remove` / `fs.remove.result` |
-| `move` | `fromPath` (`tstr`), `toPath` (`tstr`) | none | `fs.move` / `fs.move.result` |
-| `watch` | `path` (`tstr`), optional `options` (`FsWatchOptions`) | `watchId` (`tstr`) | `fs.watch` / `fs.watch.result` |
-| `unwatch` | `watchId` (`tstr`) | none | `fs.unwatch` / `fs.unwatch.result` |
+| `stat` | `path` (text) | `FsMetadata` | `fs.stat` / `fs.stat.result` |
+| `list` | `path` (text) | list of `FsDirectoryEntry` | `fs.list` / `fs.list.result` |
+| `read` | `path` (text), optional `options` (`FsReadOptions`) | `FsReadResult` | `fs.read` / `fs.read.result` |
+| `write` | `path` (text), `data` (text, base64-encoded bytes), optional `options` (`FsWriteOptions`) | `FsWriteResult` | `fs.write` / `fs.write.result` |
+| `mkdir` | `path` (text), optional `options` (`FsMkdirOptions`) | none | `fs.mkdir` / `fs.mkdir.result` |
+| `remove` | `path` (text), optional `recursive` (boolean) | none | `fs.remove` / `fs.remove.result` |
+| `move` | `fromPath` (text), `toPath` (text) | none | `fs.move` / `fs.move.result` |
+| `watch` | `path` (text), optional `options` (`FsWatchOptions`) | `watchId` (text) | `fs.watch` / `fs.watch.result` |
+| `unwatch` | `watchId` (text) | none | `fs.unwatch` / `fs.unwatch.result` |
 
 ### Schemas
 
-```cddl
-FsPermission = "read" / "write" / "create" / "delete" / "list" / "watch"
-FsEntryKind = "file" / "directory" / "unknown"
-FsWriteMode = "replace" / "append" / "patch"
-FsChangeKind = "created" / "modified" / "deleted" / "moved" / "unknown"
-FsError = "not-found" / "already-exists" / "not-a-file" / "not-a-directory" /
-  "invalid-path" / "permission-denied" / "policy-denied" / "quota-exceeded" /
-  "too-large" / "unsupported" / "conflict" / "cancelled" / "io-error"
+`FsPermission` values:
 
-FsInfo = {
-  roots: [* FsRoot],
-  limits: FsLimits,
-}
+| Value | Notes |
+|-------|-------|
+| `"read"` | Read file bytes. |
+| `"write"` | Write existing file bytes. |
+| `"create"` | Create new entries. |
+| `"delete"` | Remove entries. |
+| `"list"` | List directory entries. |
+| `"watch"` | Watch visible changes. |
 
-FsRoot = {
-  path: tstr,
-  name: tstr,
-  permissions: [* FsPermission],
-  ? description: tstr,
-}
+`FsEntryKind` values:
 
-FsLimits = {
-  maxReadBytes: uint,
-  maxWriteBytes: uint,
-  ? maxWatchCount: uint,
-  ? maxInFlightRequests: uint,
-  ? maxInFlightBytes: uint,
-}
+| Value | Notes |
+|-------|-------|
+| `"file"` | File entry. |
+| `"directory"` | Directory entry. |
+| `"unknown"` | Runtime cannot safely expose file or directory semantics. |
 
-FsAcceptRule = {
-  ? mime: tstr,
-  ? extension: tstr,
-}
+`FsWriteMode` values:
 
-FsPickOptions = {
-  ? permissions: [* FsPermission],
-  ? accept: [* FsAcceptRule],
-  ? suggestedName: tstr,
-  ? description: tstr,
-}
+| Value | Notes |
+|-------|-------|
+| `"replace"` | Replace the whole file. |
+| `"append"` | Append to the file. |
+| `"patch"` | Write at an offset. |
 
-FsPickedEntry = {
-  path: tstr,
-  kind: "file" / "directory",
-  name: tstr,
-  permissions: [* FsPermission],
-  ? size: uint,
-  ? modifiedAt: uint,
-}
+`FsChangeKind` values:
 
-FsPickResult = {
-  entries: [* FsPickedEntry],
-}
+| Value | Notes |
+|-------|-------|
+| `"created"` | Entry was created. |
+| `"modified"` | Entry was modified. |
+| `"deleted"` | Entry was deleted. |
+| `"moved"` | Entry was moved. |
+| `"unknown"` | Runtime cannot classify the change. |
 
-FsMetadata = {
-  path: tstr,
-  kind: FsEntryKind,
-  ? size: uint,
-  ? modifiedAt: uint,
-  ? createdAt: uint,
-  ? permissions: [* FsPermission],
-  ? revision: tstr,
-}
+`FsError` values:
 
-FsDirectoryEntry = {
-  name: tstr,
-  path: tstr,
-  kind: FsEntryKind,
-  ? size: uint,
-  ? modifiedAt: uint,
-}
+| Value | Notes |
+|-------|-------|
+| `"not-found"` | Entry was absent or hidden. |
+| `"already-exists"` | Destination already exists. |
+| `"not-a-file"` | Operation requires a file. |
+| `"not-a-directory"` | Operation requires a directory. |
+| `"invalid-path"` | Path violates the path model. |
+| `"invalid-data"` | Byte payload is malformed. |
+| `"permission-denied"` | Permission is absent. |
+| `"policy-denied"` | Runtime policy denies the operation. |
+| `"quota-exceeded"` | Storage quota would be exceeded. |
+| `"too-large"` | Request exceeds a size limit. |
+| `"unsupported"` | Runtime does not support the requested behavior. |
+| `"conflict"` | Precondition, concurrency, or mutation conflict. |
+| `"cancelled"` | User or runtime cancelled the operation. |
+| `"io-error"` | Backing store failed. |
 
-FsReadOptions = {
-  ? offset: uint,
-  ? length: uint,
-}
+`FsInfo` fields:
 
-FsReadResult = {
-  data: bstr,
-  offset: uint,
-  bytesRead: uint,
-  eof: bool,
-  ? size: uint,
-}
+| Field | Required | Type | Notes |
+|-------|----------|------|-------|
+| `roots` | yes | list of `FsRoot` | Visible roots. |
+| `limits` | yes | `FsLimits` | Runtime limits. |
 
-FsWriteOptions = {
-  ? mode: FsWriteMode,
-  ? offset: uint,
-  ? ifRevision: tstr,
-  ? ifAbsent: bool,
-}
+`FsRoot` fields:
 
-FsWriteResult = {
-  bytesWritten: uint,
-  ? size: uint,
-}
+| Field | Required | Type | Notes |
+|-------|----------|------|-------|
+| `path` | yes | text | Virtual absolute root path. |
+| `name` | yes | text | Runtime-curated display label. |
+| `permissions` | yes | list of `FsPermission` | Coarse permissions advertised for this root. |
+| `description` | no | text | Runtime-curated description. |
 
-FsMkdirOptions = {
-  ? recursive: bool,
-}
+`FsLimits` fields:
 
-FsWatchOptions = {
-  ? recursive: bool,
-}
+| Field | Required | Type | Notes |
+|-------|----------|------|-------|
+| `maxReadBytes` | yes | integer | Non-negative. Maximum decoded bytes requested by one `read`. |
+| `maxWriteBytes` | yes | integer | Non-negative. Maximum decoded bytes supplied by one `write`. |
+| `maxWatchCount` | no | integer | Non-negative. Maximum active watches. |
+| `maxInFlightRequests` | no | integer | Non-negative. Maximum active requests. |
+| `maxInFlightBytes` | no | integer | Non-negative. Maximum aggregate decoded bytes in active byte operations. |
 
-FsChange = {
-  watchId: tstr,
-  path: tstr,
-  kind: FsChangeKind,
-  ? fromPath: tstr,
-}
-```
+`FsAcceptRule` fields:
+
+| Field | Required | Type | Notes |
+|-------|----------|------|-------|
+| `mime` | no | text | Advisory MIME filter. |
+| `extension` | no | text | Advisory extension filter. |
+
+`FsPickOptions` fields:
+
+| Field | Required | Type | Notes |
+|-------|----------|------|-------|
+| `permissions` | no | list of `FsPermission` | Requested permission intent. |
+| `accept` | no | list of `FsAcceptRule` | Advisory UI filters. |
+| `suggestedName` | no | text | Advisory save name. |
+| `description` | no | text | Advisory picker description. |
+
+`FsPickedEntry` fields:
+
+| Field | Required | Type | Notes |
+|-------|----------|------|-------|
+| `path` | yes | text | Virtual absolute path. |
+| `kind` | yes | `"file"` or `"directory"` | Picked entry kind. |
+| `name` | yes | text | Entry name. |
+| `permissions` | yes | list of `FsPermission` | Permissions granted for the picked entry. |
+| `size` | no | integer | Non-negative. Size in bytes. |
+| `modifiedAt` | no | integer | Non-negative. Runtime-defined timestamp. |
+
+`FsPickResult` fields:
+
+| Field | Required | Type | Notes |
+|-------|----------|------|-------|
+| `entries` | yes | list of `FsPickedEntry` | Picked entries. |
+
+`FsMetadata` fields:
+
+| Field | Required | Type | Notes |
+|-------|----------|------|-------|
+| `path` | yes | text | Virtual absolute path. |
+| `kind` | yes | `FsEntryKind` | Entry kind. |
+| `size` | no | integer | Non-negative. Size in bytes. |
+| `modifiedAt` | no | integer | Non-negative. Runtime-defined timestamp. |
+| `createdAt` | no | integer | Non-negative. Runtime-defined timestamp. |
+| `permissions` | no | list of `FsPermission` | Coarse permissions known for this entry. |
+| `revision` | no | text | Opaque write-precondition token. |
+
+`FsDirectoryEntry` fields:
+
+| Field | Required | Type | Notes |
+|-------|----------|------|-------|
+| `name` | yes | text | Entry name. |
+| `path` | yes | text | Virtual absolute path. |
+| `kind` | yes | `FsEntryKind` | Entry kind. |
+| `size` | no | integer | Non-negative. Size in bytes. |
+| `modifiedAt` | no | integer | Non-negative. Runtime-defined timestamp. |
+
+`FsReadOptions` fields:
+
+| Field | Required | Type | Notes |
+|-------|----------|------|-------|
+| `offset` | no | integer | Non-negative. Starting byte offset. |
+| `length` | no | integer | Non-negative. Requested decoded byte count. |
+
+`FsReadResult` fields:
+
+| Field | Required | Type | Notes |
+|-------|----------|------|-------|
+| `data` | yes | text | Decoded file bytes, encoded as standard padded base64 on the JSON wire. |
+| `offset` | yes | integer | Non-negative. Starting byte offset. |
+| `bytesRead` | yes | integer | Non-negative. Count of decoded bytes in `data`. |
+| `eof` | yes | boolean | Whether no more bytes are available after this result. |
+| `size` | no | integer | Non-negative. Total file size in bytes. |
+
+`FsWriteOptions` fields:
+
+| Field | Required | Type | Notes |
+|-------|----------|------|-------|
+| `mode` | no | `FsWriteMode` | Write mode. |
+| `offset` | no | integer | Non-negative. Patch byte offset. |
+| `ifRevision` | no | text | Opaque revision precondition. |
+| `ifAbsent` | no | boolean | Create-only precondition when true. |
+
+`FsWriteResult` fields:
+
+| Field | Required | Type | Notes |
+|-------|----------|------|-------|
+| `bytesWritten` | yes | integer | Non-negative. Count of decoded bytes committed. |
+| `size` | no | integer | Non-negative. Resulting file size in bytes. |
+
+`FsMkdirOptions` fields:
+
+| Field | Required | Type | Notes |
+|-------|----------|------|-------|
+| `recursive` | no | boolean | Whether missing parent directories may be created. |
+
+`FsWatchOptions` fields:
+
+| Field | Required | Type | Notes |
+|-------|----------|------|-------|
+| `recursive` | no | boolean | Whether directory watches include visible descendants. |
+
+`FsChange` fields:
+
+| Field | Required | Type | Notes |
+|-------|----------|------|-------|
+| `watchId` | yes | text | Runtime-generated watch id. |
+| `path` | yes | text | Virtual absolute path. |
+| `kind` | yes | `FsChangeKind` | Change kind. |
+| `fromPath` | no | text | Previous virtual path for moved entries. |
 
 **`info()`** — Returns visible roots, coarse root permissions, and runtime limits.
 This is advisory discovery, not authorization. Permissions can change during a
@@ -276,18 +354,19 @@ is unspecified. Listing a file MUST fail with `not-a-directory`.
 
 **`read(path, options?)`** — Reads bytes from a file. Range reads are mandatory.
 `offset` defaults to `0`. `length` defaults to the runtime's maximum readable
-chunk. `length` MUST NOT exceed `FsLimits.maxReadBytes`. The runtime MAY return
-fewer bytes than requested. `eof: true` means no more bytes are available after
-this result. Reading a directory MUST fail with `not-a-file`.
+chunk. `length` counts decoded bytes and MUST NOT exceed
+`FsLimits.maxReadBytes`. The runtime MAY return fewer bytes than requested.
+`eof: true` means no more bytes are available after this result. Reading a
+directory MUST fail with `not-a-file`.
 
 **`write(path, data, options?)`** — Writes bytes to a file. Range writes are
 mandatory. `mode` defaults to `replace`. `replace` replaces the whole file and
 MUST NOT carry `offset`. `append` appends to the file and MUST NOT carry
-`offset`. `patch` writes at `offset` and MUST carry `offset`. `data` length MUST
-NOT exceed `FsLimits.maxWriteBytes`. A successful write MUST commit all supplied
-bytes atomically and report `bytesWritten` equal to the data length. If the
-runtime cannot do so, it MUST fail without changing the file. Concurrent appends
-MUST NOT interleave their bytes.
+`offset`. `patch` writes at `offset` and MUST carry `offset`. The decoded length
+of `data` MUST NOT exceed `FsLimits.maxWriteBytes`. A successful write MUST
+commit all supplied bytes atomically and report `bytesWritten` equal to the
+decoded data length. If the runtime cannot do so, it MUST fail without changing
+the file. Concurrent appends MUST NOT interleave their bytes.
 
 Writing an existing file requires `write` permission. Creating an absent file
 requires `create` permission and authorization on its parent directory. Runtime
@@ -398,6 +477,21 @@ Key design notes:
   revealing hidden paths. It SHOULD normalize error detail and timing for hidden
   paths.
 
+### Byte Encoding
+
+`fs.write.data` and `FsReadResult.data` carry file bytes as base64 text in the
+JSON wire envelope.
+
+- The encoding MUST use the RFC 4648 standard base64 alphabet with padding.
+- Empty bytes MUST be encoded as the empty string.
+- Runtimes MUST reject malformed base64, omitted padding, whitespace, base64url,
+  and non-canonical encodings with `invalid-data`.
+- `bytesRead`, `bytesWritten`, `FsLimits.maxReadBytes`,
+  `FsLimits.maxWriteBytes`, and `FsLimits.maxInFlightBytes` count decoded bytes,
+  not the encoded JSON string length.
+- Runtimes MAY separately enforce encoded envelope size limits. Those limits are
+  runtime policy and do not change the `FsLimits` byte counts.
+
 ### Examples
 
 **Info:**
@@ -443,19 +537,19 @@ Key design notes:
 **Range read:**
 ```
 -> { "type": "fs.read", "id": "r1", "path": "/shared/video.bin", "options": { "offset": 1048576, "length": 65536 } }
-<- { "type": "fs.read.result", "id": "r1", "result": { "data": <bytes>, "offset": 1048576, "bytesRead": 65536, "eof": false, "size": 9000000 } }
+<- { "type": "fs.read.result", "id": "r1", "result": { "data": "SGVsbG8gd29ybGQh", "offset": 1048576, "bytesRead": 12, "eof": false, "size": 9000000 } }
 ```
 
 **Replace file:**
 ```
--> { "type": "fs.write", "id": "w1", "path": "/shared/note.txt", "data": <bytes>, "options": { "mode": "replace" } }
+-> { "type": "fs.write", "id": "w1", "path": "/shared/note.txt", "data": "SGVsbG8gd29ybGQh", "options": { "mode": "replace" } }
 <- { "type": "fs.write.result", "id": "w1", "result": { "bytesWritten": 12, "size": 12 } }
 ```
 
 **Patch file:**
 ```
--> { "type": "fs.write", "id": "w2", "path": "/shared/db.bin", "data": <bytes>, "options": { "mode": "patch", "offset": 4096 } }
-<- { "type": "fs.write.result", "id": "w2", "result": { "bytesWritten": 512, "size": 8192 } }
+-> { "type": "fs.write", "id": "w2", "path": "/shared/db.bin", "data": "AAECAw==", "options": { "mode": "patch", "offset": 4096 } }
+<- { "type": "fs.write.result", "id": "w2", "result": { "bytesWritten": 4, "size": 8192 } }
 ```
 
 **Recursive mkdir:**
@@ -501,7 +595,8 @@ Key design notes:
 - The runtime MUST expose picked entries only as virtual paths in the napplet's
   visible filesystem.
 - The runtime MAY require a user gesture before showing picker UI.
-- The runtime MUST enforce `FsLimits.maxReadBytes` and `FsLimits.maxWriteBytes`.
+- The runtime MUST enforce `FsLimits.maxReadBytes` and `FsLimits.maxWriteBytes`
+  as decoded byte limits.
 - The runtime SHOULD enforce per-napplet limits on active watches, in-flight
   requests, aggregate in-flight bytes, recursive work, and operation duration.
 - The runtime MAY reject work beyond those limits with `too-large`,
@@ -563,3 +658,5 @@ Key design notes:
 - `pending` - Hardened shared mutation, concurrency, metadata, and watch policy.
 - `pending` - Added user-mediated picker operations that expose selected files and
   directories as virtual paths with runtime-defined persistence.
+- `pending` - Defined base64 byte encoding, decoded-byte limits, schema tables,
+  and `invalid-data` for malformed byte payloads.
