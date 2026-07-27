@@ -15,16 +15,18 @@ Virtual Filesystem Access
 NAP-FS provides napplets with shell-mediated access to a runtime-owned virtual
 filesystem. The filesystem may be backed by local files, origin-private storage,
 remote storage, a database, or any other runtime implementation. A napplet sees
-only virtual paths, directory entries, file metadata, byte reads and writes, and
-advisory change events.
+only virtual paths, directory entries, file metadata, byte reads and writes,
+user-mediated picker results, and advisory change events.
 
 Backing storage can be shared across napplets. Each napplet still sees a
 policy-bound view with its own permissions. Every operation is authorized
-against the runtime-bound napplet identity; no request payload can widen that
-view.
+against the runtime-bound napplet identity. Paths, permission lists, metadata,
+and options supplied by the napplet are not authority. Only runtime policy and
+runtime-mediated user choice can expand the visible view.
 
 NAP-FS defines the filesystem seam. It does not define host paths, mount sources,
-picker UI, sync backends, OS permissions, or storage layout.
+picker UI, sync backends, OS permissions, or storage layout. Picker operations
+return only virtual paths in the napplet's visible filesystem.
 
 ## Path Model
 
@@ -73,6 +75,10 @@ root mutable by multiple napplets MUST apply explicit policy to every mutation.
 | Operation | Parameters | Result | Wire |
 |-----------|------------|--------|------|
 | `info` | none | `FsInfo` | `fs.info` / `fs.info.result` |
+| `pickFile` | optional `options` (`FsPickOptions`) | `FsPickResult` | `fs.pickFile` / `fs.pickFile.result` |
+| `pickFiles` | optional `options` (`FsPickOptions`) | `FsPickResult` | `fs.pickFiles` / `fs.pickFiles.result` |
+| `pickDirectory` | optional `options` (`FsPickOptions`) | `FsPickResult` | `fs.pickDirectory` / `fs.pickDirectory.result` |
+| `pickSaveFile` | optional `options` (`FsPickOptions`) | `FsPickResult` | `fs.pickSaveFile` / `fs.pickSaveFile.result` |
 | `stat` | `path` (`tstr`) | `FsMetadata` | `fs.stat` / `fs.stat.result` |
 | `list` | `path` (`tstr`) | list of `FsDirectoryEntry` | `fs.list` / `fs.list.result` |
 | `read` | `path` (`tstr`), optional `options` (`FsReadOptions`) | `FsReadResult` | `fs.read` / `fs.read.result` |
@@ -92,7 +98,7 @@ FsWriteMode = "replace" / "append" / "patch"
 FsChangeKind = "created" / "modified" / "deleted" / "moved" / "unknown"
 FsError = "not-found" / "already-exists" / "not-a-file" / "not-a-directory" /
   "invalid-path" / "permission-denied" / "policy-denied" / "quota-exceeded" /
-  "too-large" / "unsupported" / "conflict" / "io-error"
+  "too-large" / "unsupported" / "conflict" / "cancelled" / "io-error"
 
 FsInfo = {
   roots: [* FsRoot],
@@ -112,6 +118,31 @@ FsLimits = {
   ? maxWatchCount: uint,
   ? maxInFlightRequests: uint,
   ? maxInFlightBytes: uint,
+}
+
+FsAcceptRule = {
+  ? mime: tstr,
+  ? extension: tstr,
+}
+
+FsPickOptions = {
+  ? permissions: [* FsPermission],
+  ? accept: [* FsAcceptRule],
+  ? suggestedName: tstr,
+  ? description: tstr,
+}
+
+FsPickedEntry = {
+  path: tstr,
+  kind: "file" / "directory",
+  name: tstr,
+  permissions: [* FsPermission],
+  ? size: uint,
+  ? modifiedAt: uint,
+}
+
+FsPickResult = {
+  entries: [* FsPickedEntry],
 }
 
 FsMetadata = {
@@ -184,6 +215,54 @@ and descriptions MUST be runtime-curated labels safe to disclose to the napplet.
 They MUST NOT reveal account names, device names, private folder names, storage
 providers, organizations, or user-specific labels unless runtime policy
 explicitly permits that disclosure.
+
+**`pickFile(options?)`** — Asks the runtime to let the user select one file.
+Picker operations are user-mediated authority requests. The napplet supplies
+intent and advisory filters only. It MUST NOT supply host paths, file URLs,
+OS-native paths, common-folder identifiers, volume names, mount identifiers, or
+storage-provider identifiers. The runtime MAY show UI, require a user gesture,
+deny the request, or return `cancelled` when the user cancels. A successful
+`pickFile` result MUST contain exactly one file entry.
+
+**`pickFiles(options?)`** — Asks the runtime to let the user select one or more
+files. A successful result MUST contain at least one file entry. Cancellation
+MUST be reported with `cancelled`, not as an empty successful result.
+
+**`pickDirectory(options?)`** — Asks the runtime to let the user select one
+directory. A successful result MUST contain exactly one directory entry.
+
+**`pickSaveFile(options?)`** — Asks the runtime to let the user select or name one
+file destination. A successful result MUST contain exactly one file entry. The
+entry MAY be absent in the backing store until the napplet writes it, but the
+returned virtual path MUST be authorized for the returned permissions.
+
+Picker options are hints, not authority. Requested permissions, accepted MIME
+types, accepted extensions, suggested names, and descriptions do not widen the
+napplet's view. The runtime decides the actual selected objects and permissions
+according to user choice and runtime policy. `accept` filters are advisory UI
+filters only; runtimes and napplets MUST NOT treat them as content validation.
+When `permissions` is absent, the requested permission intent defaults to
+`read` for `pickFile` and `pickFiles`, `read` and `list` for `pickDirectory`, and
+`write` and `create` for `pickSaveFile`.
+
+Selected files or directories MAY originate outside the napplet's current visible
+virtual filesystem. Before returning success, the runtime MUST expose each
+selected object through a virtual absolute path in the napplet's visible
+filesystem. The returned path MUST obey the NAP-FS path model. Subsequent
+`stat`, `list`, `read`, `write`, `mkdir`, `remove`, `move`, `watch`, and
+`unwatch` operations on that path use normal NAP-FS authorization.
+
+Picker results MUST NOT expose host paths, file URLs, OS-native separators,
+volume names, usernames, mount identifiers, backing-store identifiers, or storage
+provider identifiers. They MUST NOT reveal whether the selected object was
+already inside an existing visible root, mounted from outside it, copied into the
+filesystem, proxied, or backed by another runtime mechanism.
+
+Picker grants are not durable authority. A runtime MAY make a picked entry
+visible only for the current session, MAY persist it across sessions, or MAY
+revoke it at any time according to runtime policy. A napplet MUST NOT assume that
+a picked path remains available after remount, reload, or runtime restart. It
+MUST rediscover available roots with `info()` or ask the user to pick again.
 
 **`stat(path)`** — Returns metadata for a visible file or directory. Metadata is
 intentionally coarse. It omits host-specific identifiers such as inode, device,
@@ -278,6 +357,14 @@ indistinguishable from an unknown identifier.
 |------|-----------|----------------|
 | `fs.info` | napplet -> runtime | `id` |
 | `fs.info.result` | runtime -> napplet | `id`, `info?`, `error?` |
+| `fs.pickFile` | napplet -> runtime | `id`, `options?` |
+| `fs.pickFile.result` | runtime -> napplet | `id`, `result?`, `error?` |
+| `fs.pickFiles` | napplet -> runtime | `id`, `options?` |
+| `fs.pickFiles.result` | runtime -> napplet | `id`, `result?`, `error?` |
+| `fs.pickDirectory` | napplet -> runtime | `id`, `options?` |
+| `fs.pickDirectory.result` | runtime -> napplet | `id`, `result?`, `error?` |
+| `fs.pickSaveFile` | napplet -> runtime | `id`, `options?` |
+| `fs.pickSaveFile.result` | runtime -> napplet | `id`, `result?`, `error?` |
 | `fs.stat` | napplet -> runtime | `id`, `path` |
 | `fs.stat.result` | runtime -> napplet | `id`, `metadata?`, `error?` |
 | `fs.list` | napplet -> runtime | `id`, `path` |
@@ -329,6 +416,30 @@ Key design notes:
    }
 ```
 
+**Pick text file:**
+```
+-> { "type": "fs.pickFile", "id": "p1", "options": { "permissions": ["read"], "accept": [{ "mime": "text/plain" }, { "extension": ".md" }] } }
+<- { "type": "fs.pickFile.result", "id": "p1", "result": { "entries": [{ "path": "/picked/report.md", "kind": "file", "name": "report.md", "permissions": ["read"], "size": 1200 }] } }
+```
+
+**Pick directory:**
+```
+-> { "type": "fs.pickDirectory", "id": "p2", "options": { "permissions": ["read", "list", "watch"], "description": "Choose media folder" } }
+<- { "type": "fs.pickDirectory.result", "id": "p2", "result": { "entries": [{ "path": "/picked/media", "kind": "directory", "name": "media", "permissions": ["read", "list"] }] } }
+```
+
+**Pick save destination:**
+```
+-> { "type": "fs.pickSaveFile", "id": "p3", "options": { "permissions": ["write", "create"], "suggestedName": "export.json", "accept": [{ "mime": "application/json" }] } }
+<- { "type": "fs.pickSaveFile.result", "id": "p3", "result": { "entries": [{ "path": "/picked/export.json", "kind": "file", "name": "export.json", "permissions": ["write", "create"] }] } }
+```
+
+**Pick cancelled:**
+```
+-> { "type": "fs.pickFile", "id": "p4" }
+<- { "type": "fs.pickFile.result", "id": "p4", "error": "cancelled" }
+```
+
 **Range read:**
 ```
 -> { "type": "fs.read", "id": "r1", "path": "/shared/video.bin", "options": { "offset": 1048576, "length": 65536 } }
@@ -378,11 +489,18 @@ Key design notes:
   at creation time by the projection.
 - The runtime MUST respond to every request with a result message carrying the
   same `id`.
-- The runtime MUST NOT trust any path, permission, root, or watch identifier
-  supplied by the napplet beyond using it as an untrusted request parameter.
-- The runtime MUST enforce the napplet's view on `stat`, `list`, `read`, `write`,
-  `mkdir`, `remove`, `move`, `watch`, and `unwatch`.
+- The runtime MUST NOT trust any path, permission, root, watch identifier, picker
+  option, or picker filter supplied by the napplet beyond using it as an
+  untrusted request parameter.
+- The runtime MUST enforce the napplet's view on `pickFile`, `pickFiles`,
+  `pickDirectory`, `pickSaveFile`, `stat`, `list`, `read`, `write`, `mkdir`,
+  `remove`, `move`, `watch`, and `unwatch`.
 - The runtime MUST NOT expose host absolute paths or backing-store identifiers.
+- The runtime MUST mediate picker operations through runtime policy and, when
+  required, user choice.
+- The runtime MUST expose picked entries only as virtual paths in the napplet's
+  visible filesystem.
+- The runtime MAY require a user gesture before showing picker UI.
 - The runtime MUST enforce `FsLimits.maxReadBytes` and `FsLimits.maxWriteBytes`.
 - The runtime SHOULD enforce per-napplet limits on active watches, in-flight
   requests, aggregate in-flight bytes, recursive work, and operation duration.
@@ -392,8 +510,8 @@ Key design notes:
   strategy as long as the napplet-observed contract is preserved.
 - The runtime MAY report stale metadata when its backing store is eventually
   consistent.
-- The runtime MAY revoke permissions during a session. Subsequent operations MUST
-  reflect the new policy.
+- The runtime MAY revoke permissions or picked access during a session.
+  Subsequent operations MUST reflect the new policy.
 
 ## Security Considerations
 
@@ -402,6 +520,8 @@ Key design notes:
   napplet's mutable scope and explicit policy for destructive shared operations.
 - Host paths are sensitive. Exposing them leaks usernames, device layout, mounted
   volumes, and runtime internals. NAP-FS uses virtual paths only.
+- Picker results are subject to the same host-path secrecy rules. They MUST NOT
+  reveal host paths, volume names, storage providers, or backing-store details.
 - Path traversal is a primary attack surface. Runtimes MUST reject `.` and `..`,
   normalize before authorization, and prevent mount or symlink escape.
 - Recursive watch can leak hidden descendants if implemented naively. Runtimes
@@ -411,6 +531,13 @@ Key design notes:
 - Large reads, writes, recursive operations, and watches are denial-of-service
   surfaces. Runtimes SHOULD enforce quotas, chunk limits, aggregate byte limits,
   request limits, watch limits, and operation timeouts.
+- Picker UI can be abused for prompt spam and focus disruption. Runtimes SHOULD
+  rate-limit picker requests and MAY require user activation.
+- Picker filters are advisory. Runtimes and napplets MUST NOT infer safe content
+  from MIME types, extensions, suggested names, or picker descriptions.
+- Picker results reveal user choices and may reveal names, sizes, timestamps, and
+  kinds. Runtimes SHOULD minimize returned metadata and SHOULD avoid denial
+  detail that reveals whether a hidden or host object exists.
 - `info()` is not an authorization token. Napplets MUST handle operation failures
   even when `info()` advertised a matching permission.
 - File and directory names, sizes, timestamps, kinds, and change timing are
@@ -434,3 +561,5 @@ Key design notes:
 
 - `e63e73b` - Introduced NAP-FS for shell-mediated virtual filesystem access.
 - `pending` - Hardened shared mutation, concurrency, metadata, and watch policy.
+- `pending` - Added user-mediated picker operations that expose selected files and
+  directories as virtual paths with runtime-defined persistence.
