@@ -76,7 +76,9 @@ NAP-THEME provides napplets with read-only access to the shell's active theme. T
 Key design notes:
 - `theme.get` / `theme.get.result` use `id` for correlation.
 - `theme.changed` has no `id` — it is a shell-initiated push with no napplet request to correlate.
-- There is no subscribe or unsubscribe. All napplets that declare `theme` in their manifest `requires` tags automatically receive `theme.changed` when the active theme changes.
+- There is no subscribe or unsubscribe. All napplets to which the runtime exposes
+  the `theme` domain automatically receive `theme.changed` when the active theme
+  changes. Event `R` / `O` declarations do not grant that exposure.
 
 ### Examples
 
@@ -122,7 +124,10 @@ Any result message MAY include an `error` field (string). When `error` is presen
 
 - The shell MUST respond to `theme.get` with a `theme.get.result` carrying the same `id`.
 - The shell MUST include `colors` with all three fields (`background`, `text`, `primary`) in every theme payload. The `fonts`, `background`, and `title` fields are optional and MAY be omitted.
-- The shell MUST broadcast `theme.changed` to all napplets that declare `theme` in their manifest `requires` tags when the active theme changes. The shell MAY also broadcast `theme.changed` to napplets that do not declare it, at the shell's discretion.
+- The shell MUST broadcast `theme.changed` to every running napplet to which it
+  exposes the `theme` domain when the active theme changes. It MUST NOT infer
+  exposure from the napplet event's `R` / `O` declarations; those tags are
+  declarations of use, not grants.
 - The shell MAY source the theme from any origin: a Nostr kind 16767 event, a user preference, a hardcoded default, or any other mechanism. The theme source is an implementation detail invisible to napplets.
 
 ### Kind 16767 Mapping

@@ -14,12 +14,17 @@ Archetype Intent Dispatcher
 
 NAP-INTENT provides napplets with a shell-mediated interface for invoking *another* napplet by its **archetype** — a shared role name such as `note`, `profile`, or `emoji-list` (see [ARCHETYPES.md](../ARCHETYPES.md)). A napplet describes *what role* it wants, *what action* to perform, and *what payload* to deliver; the shell resolves the role to an installed napplet, applies the user's default-handler preference, creates or focuses the window, and delivers the payload. This is the napplet equivalent of an operating system's implicit intents with a "default application": the caller names a role and an action, never a specific napplet.
 
-The model maps directly onto a proven pattern (Android-style implicit intents): the **archetype** is the intent category, the **action** is the intent action, the **payload** is the extras, and the user's default handler is the default app. NAP-INTENT standardizes the **envelope**, not the payload. The `payload` is opaque and MAY be tagged by a `convention` field naming the unnumbered `napplet:<archetype>/<intent>[...?params]` payload shape, such as `napplet:note/open` or `napplet:profile/open?pubkey=<pubkey>`. This keeps routing and parsing independent without forcing developers through a numbered registry before napplets can interoperate:
+The model maps directly onto a proven pattern (Android-style implicit intents): the **archetype** is the intent category, the **action** is the intent action, the **payload** is the extras, and the user's default handler is the default app. NAP-INTENT standardizes the **envelope**, not the payload. The `payload` is opaque and MAY be tagged by a `convention` field naming the stable, queryless `napplet:<archetype>/<intent>` payload shape, such as `napplet:note/open` or `napplet:profile/open`. This keeps routing and parsing separate without forcing developers through a numbered registry before napplets can interoperate:
 
 - **archetype** — *routing*: which napplet should handle this, and whose default applies.
 - **convention** — *parsing*: what payload shape the handler expects.
 
-The two are orthogonal (N:M): one convention may serve several archetypes, and one archetype may accept several conventions. Resolution of an archetype to a concrete napplet — including which napplets fulfill which roles and which is the user's default — is shell policy. Napplets never address each other directly.
+One archetype may accept several conventions. A convention identity is
+role-scoped: its `<archetype>` segment MUST equal the requested archetype.
+Equivalent payload semantics for another role use a separate convention
+identity. Resolution of an archetype to a concrete napplet — including which
+napplets fulfill which roles and which is the user's default — is shell policy.
+Napplets never address each other directly.
 
 ## API Surface
 
@@ -46,7 +51,7 @@ The two are orthogonal (N:M): one convention may serve several archetypes, and o
 | Field | Required | Type | Notes |
 |-------|----------|------|-------|
 | `convention` | no | text | Unnumbered convention shaping the payload. |
-| `handler` | no | text | `default`, `choose`, or a specific napplet dTag. |
+| `handler` | no | text | `default`, `choose`, or a specific `35129:<pubkey>:<d>` napplet address. |
 | `behavior` | no | `IntentBehavior` | Window/focus hints. |
 
 `IntentRequest` fields:
@@ -57,14 +62,14 @@ The two are orthogonal (N:M): one convention may serve several archetypes, and o
 | `action` | no | text | Defaults to `open`. |
 | `convention` | no | text | Unnumbered convention shaping the payload. |
 | `payload` | no | any | Opaque; typed by `convention`. |
-| `handler` | no | text | `default`, `choose`, or a specific napplet dTag. |
+| `handler` | no | text | `default`, `choose`, or a specific `35129:<pubkey>:<d>` napplet address. |
 | `behavior` | no | `IntentBehavior` | Window/focus hints. |
 
 `IntentCandidate` fields:
 
 | Field | Required | Type | Notes |
 |-------|----------|------|-------|
-| `dTag` | yes | text | Napplet that can fulfill the archetype. |
+| `address` | yes | text | Stable `35129:<pubkey>:<d>` address of the napplet that can fulfill the archetype. |
 | `title` | no | text | Human-readable handler label. |
 | `actions` | yes | list of text | Supported actions. |
 | `conventions` | yes | list of text | Supported payload conventions. |
@@ -87,7 +92,7 @@ The two are orthogonal (N:M): one convention may serve several archetypes, and o
 | `archetype` | yes | text | Requested role slug. |
 | `action` | yes | text | Dispatched action. |
 | `handled` | yes | boolean | Whether a handler accepted the dispatch. |
-| `handler` | no | text | dTag of the napplet that handled it. |
+| `handler` | no | text | Stable `35129:<pubkey>:<d>` address of the napplet that handled it. |
 | `windowId` | no | text | Shell-assigned window id. |
 | `convention` | no | text | Payload convention used for delivery. |
 | `error` | no | text | Failure reason. |
@@ -99,7 +104,7 @@ The two are orthogonal (N:M): one convention may serve several archetypes, and o
 
 **`open(archetype, payload?, opts?)`** — Convenience sugar for `invoke({ archetype, action: "open", payload, ...opts })`, the common case.
 
-**`available(archetype)`** — Returns whether the runtime can currently satisfy `archetype`, the candidate napplets that fulfill it, and the actions and conventions each supports. This is the pre-flight guardrail: a caller checks availability before showing an affordance, so a missing handler fails loudly at the call site instead of silently at delivery. Availability is sourced from the **installed-napplet catalog** (the manifests the runtime knows about), so it reports `true` for an installed handler that is not yet running.
+**`available(archetype)`** — Returns whether the runtime can currently satisfy `archetype`, the candidate napplets that fulfill it, and the actions and conventions each supports. This is the pre-flight guardrail: a caller checks availability before showing an affordance, so a missing handler fails loudly at the call site instead of silently at delivery. Availability is sourced from the **installed-napplet catalog** (the signed napplet events the runtime knows about). A matching `z` tag supplies the convention-free `open` action. Each matching `i` tag supplies one convention and its final path segment supplies another accepted action. This reports `true` for an installed handler that is not yet running.
 
 **`handlers()`** — Returns availability for every archetype the runtime can currently satisfy. Useful for menus and capability surfaces.
 
@@ -124,7 +129,10 @@ Key design notes:
 - The **action is a field** (`request.action`), never part of the message type. `intent.invoke` is the single dispatch verb for `open`, `edit`, `pick`, `share`, and any future action.
 - `intent.changed` is a shell push message and has no `id`.
 - The shell delivers `payload` to the resolved handler using the named `convention`'s ordinary delivery mechanism — typically an INC topic event (e.g., `napplet:note/open`), or initial state passed at instantiation for a cold-started handler. NAP-INTENT governs resolution, default handling, and window lifecycle; the convention governs the payload shape.
-- `convention` and `archetype` are independent. The shell MUST NOT assume a one-to-one mapping between them.
+- An archetype may accept several conventions, but every convention is
+  role-scoped. The shell MUST reject a convention whose embedded role does not
+  equal the requested `archetype` or whose final path segment does not equal the
+  requested `action`.
 
 ### Examples
 
@@ -138,7 +146,7 @@ Key design notes:
        "archetype": "emoji-list",
        "available": true,
        "candidates": [
-         { "dTag": "emojilistr", "title": "Emoji List Maker", "actions": ["open"], "conventions": ["napplet:emoji-list/open"], "isDefault": true }
+         { "address": "35129:<pubkey>:emojilistr", "title": "Emoji List Maker", "actions": ["open"], "conventions": ["napplet:emoji-list/open"], "isDefault": true }
        ],
        "hasDefault": true
      }
@@ -161,7 +169,7 @@ Key design notes:
        "archetype": "emoji-list",
        "action": "open",
        "handled": true,
-       "handler": "emojilistr",
+       "handler": "35129:<pubkey>:emojilistr",
        "windowId": "win-12",
        "convention": "napplet:emoji-list/open"
      }
@@ -181,7 +189,7 @@ Key design notes:
      }
    }
 <- { "type": "intent.invoke.result", "id": "i2",
-     "result": { "ok": true, "archetype": "note", "action": "open", "handled": true, "handler": "noteview", "windowId": "win-13", "convention": "napplet:note/open" } }
+     "result": { "ok": true, "archetype": "note", "action": "open", "handled": true, "handler": "35129:<pubkey>:noteview", "windowId": "win-13", "convention": "napplet:note/open" } }
 ```
 
 **No handler installed:**
@@ -202,19 +210,25 @@ The shell SHOULD return a structured `result` with `ok: false` and `handled: fal
 - The shell MUST resolve an `archetype` to a handler using its catalog of installed napplets and the user's default-handler preference for that archetype.
 - The shell MUST keep a user-overridable default per archetype. When a default exists, `invoke` without an explicit `handler` MUST route to it.
 - The shell SHOULD offer an "open with…" chooser when `handler: "choose"`, or when no default exists and more than one candidate is available.
-- The shell MUST source `available()` / `handlers()` from the installed-napplet catalog (signed NIP-5A manifests), not from currently-running instances, so not-yet-running handlers are discoverable.
+- The shell MUST source `available()` / `handlers()` from the installed-napplet
+  catalog of signed [kind `35129` web napplet events](../WEB-NAPPLET.md), using
+  their `z` role and `i` convention tags, not from currently-running instances,
+  so not-yet-running handlers are discoverable.
 - The shell MUST respond to every request with a result message carrying the same `id`.
 - The shell MUST deliver `payload` to the resolved handler only after that handler is ready to receive it.
-- The shell MUST NOT let a napplet learn the identity of, or address, another napplet except through this resolution. Callers name roles, never instances — unless the user has explicitly granted a specific `handler` dTag.
-- The shell MAY reject an `invoke` whose `action` or `convention` the resolved handler does not support, or MAY fall back to the archetype's recommended default convention.
+- The shell MUST NOT let a napplet learn the identity of, or address, another napplet except through this resolution. Callers name roles, never instances — unless the user has explicitly granted a specific `handler` address.
+- The shell MUST reject an `invoke` whose `action` or explicit `convention` the
+  resolved handler does not advertise. When `convention` is omitted, the shell
+  MAY use the archetype's recommended default convention if its role and action
+  match the request.
 - The shell SHOULD emit `intent.changed` when the catalog or a default changes.
 
 ## Security Considerations
 
 - Dispatching an intent is a navigation and focus-stealing action. Shells SHOULD treat `invoke` as an untrusted request and MAY rate-limit or require a user gesture, especially for `behavior.newWindow` or `behavior.focus`.
-- Archetype resolution is a trust boundary. A napplet asking for `archetype: "note"` MUST NOT be able to coerce the shell into routing to an arbitrary napplet; only the user's default or an explicit user choice decides the handler. The `handler: "<dTag>"` form SHOULD require that the user has authorized cross-napplet targeting for the caller.
+- Archetype resolution is a trust boundary. A napplet asking for `archetype: "note"` MUST NOT be able to coerce the shell into routing to an arbitrary napplet; only the user's default or an explicit user choice decides the handler. A specific `handler` address SHOULD require that the user has authorized cross-napplet targeting for the caller.
 - Payloads cross a napplet boundary. The shell relays `payload` opaquely; the receiving napplet MUST treat it as untrusted input and validate it against the named `convention`. The shell SHOULD NOT inspect or mutate payload contents beyond what routing requires.
-- `available()` reveals which napplets are installed, which is a fingerprinting surface. Shells MAY scope or redact candidate details (e.g., omit `dTag`/`title`) per policy while still answering `available`.
+- `available()` reveals which napplets are installed, which is a fingerprinting surface. Shells MAY scope or redact candidate details (e.g., omit `address`/`title`) per policy while still answering `available`.
 - Default-handler settings are user state. Shells MUST NOT let a napplet silently set or change a default; changing a default is a user action.
 - Cold-start delivery (passing initial payload at instantiation) MUST NOT leak the payload to napplets other than the resolved handler.
 

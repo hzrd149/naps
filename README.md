@@ -11,6 +11,7 @@ contracts.
 
 - [Glossary](#glossary)
 - [What is a napplet?](#what-is-a-napplet)
+- [Web napplet event](WEB-NAPPLET.md)
 - [What is a NAP?](#what-is-a-nap)
 - [Layering](#layering)
 - [Projections](#projections)
@@ -26,14 +27,14 @@ contracts.
 | Term | Meaning |
 |------|---------|
 | **Seam** | The boundary between a napplet and its runtime — what's offered, and how it's asked for. Transport-agnostic. |
-| **Napplet** | A Nostr applet: a small, single-purpose app. Described by a [NIP-5A](https://github.com/nostr-protocol/nips/blob/master/5A.md) manifest. |
+| **Napplet** | A Nostr applet: a small, single-purpose app. A web napplet is published as a [kind `35129` event](WEB-NAPPLET.md). |
 | **Runtime** (shell) | The host that composes napplets and provides their capabilities. |
 | **NAP** | One capability contract in the seam — operations, message schema, error model, and trust boundary. Never the delivery mechanism. |
 | **Domain** | A capability's short name (`relay`, `intent`); how a NAP is referenced and discovered. |
 | **Projection** (binding) | A mapping of the seam onto one concrete host (web, native, WASM, …). |
 | **NAP-WORD** | An interface spec — an API the runtime offers. One canonical spec per name. |
 | **Convention** | An unnumbered message shape napplets agree to use. Its stable identity is `napplet:<archetype>/<intent>`; a developer-facing invocation MAY append `?params`, which the runtime binding transposes into payload data. Not a NAP. |
-| **NAAT** | A *Napplet Archetype*: a canonical role name (`note`, `feed`) with a boundary. Not a NAP. |
+| **NAAT** | A *Napplet Archetype*: a standardized role name (`note`, `feed`) with a boundary. Not a NAP. Private roles do not require registration. |
 
 ## What is a napplet?
 
@@ -42,11 +43,9 @@ widget, a feed viewer, a profile editor, and a relay manager are four napplets,
 not one app with four tabs. **The runtime composes napplets; napplets do not
 compose themselves.**
 
-A napplet is described and distributed as a
-[NIP-5A](https://github.com/nostr-protocol/nips/blob/master/5A.md) manifest (a
-Nostr event, kind 35128): a pubkey-addressed `dTag`, an aggregate hash of its
-build, and the capabilities it requires. That manifest is the napplet's identity,
-independent of how or where it runs.
+A web napplet is described and distributed as a [kind `35129` addressable
+event](WEB-NAPPLET.md). Its `35129:<pubkey>:<d>` coordinate is the stable
+napplet identity. Its `x` tag identifies one exact, verified HTML build.
 
 ## What is a NAP?
 
@@ -60,21 +59,22 @@ A NAP is **not**:
 - **the transport.** `postMessage`, iframes, and `window.napplet.*` are
   *projection* details (see [Projections](#projections)), not the NAP. The same
   `NAP-RELAY` contract could be carried by IPC, an FFI call, or WASM imports.
-- **Nostr itself.** Napplets are Nostr-native — identities are pubkeys, manifests
-  are events, payloads carry Nostr data. NAPs standardize the *runtime contract*
+- **Nostr itself.** Napplets are Nostr-native — identities are pubkeys, web
+  napplets are events, payloads carry Nostr data. NAPs standardize the *runtime contract*
   around that data; they do not redefine Nostr. The seam is transport-agnostic,
   not Nostr-agnostic.
 
 ## Layering
 
 ```
-NIP-5A   what a napplet IS / how it's described    manifest, identity   (substrate)
-  NAP    what a runtime offers a napplet           the capability seam  (this repo)
-   └─ projection: web, native, WASM, …             same contracts, different host
+event spec   what a napplet IS / how it's described    artifact, identity
+  NAP        what a runtime offers a napplet           capability seam
+   └─ projection: web, native, WASM, …                 same contracts, different host
 ```
 
-NIP-5A defines the napplet. A NAP defines a capability the napplet can ask a
-runtime for. A *projection* implements that seam for a concrete host.
+The [web napplet event](WEB-NAPPLET.md) defines the published artifact. A NAP
+defines a capability the napplet can ask a runtime for. A *projection*
+implements that seam for a concrete host.
 
 ## Projections
 
@@ -104,8 +104,10 @@ checks for one before using it by domain:
 shell.supports("relay")          // is the relay capability available?
 ```
 
-A napplet also declares the capabilities it needs in its NIP-5A manifest
-(`["requires", "relay"]`); a runtime that lacks one may refuse to load it.
+A web napplet declares domains needed for full functionality with `R` tags and
+optional integrations with `O` tags (`["R", "relay"]`, `["O", "theme"]`).
+These declarations do not grant access. The napplet still checks runtime
+availability before calling a domain.
 
 **Request / result.** Messages are objects with a `type` discriminant in
 `domain.action` form. Request/result pairs correlate by `id`; fire-and-forget
@@ -120,8 +122,9 @@ messages omit it; runtimes may push unsolicited messages.
 untrusted: they never receive signing keys, wallet credentials, or raw network
 access. Security-critical operations (signing, payments, uploads) are performed
 by the runtime on the napplet's behalf, gated by per-napplet capability policy.
-Napplet identity — the `(dTag, aggregateHash)` tuple — is assigned by the runtime
-from the manifest, not negotiated by the napplet.
+Web napplet identity — the `(35129:<pubkey>:<d>, artifactHash)` tuple — is
+assigned by the runtime after event and artifact verification, not negotiated by
+the napplet.
 
 ## The two axes
 
@@ -186,24 +189,26 @@ convention and the **consumer** is the napplet that receives and acts on it,
 reached directly or, by archetype, via the runtime.
 
 A convention that shapes an archetype open payload is advertised by its stable,
-queryless identity on the archetype tag and in `intent.available()` handler
-metadata. No registry edit is required before two napplets can try a compatible
-payload.
+queryless identity in an `i` tag and in `intent.available()` handler metadata.
+Its role is advertised separately with `z`. No registry edit is required before
+two napplets can try a compatible payload.
 
 ### NAAT — archetypes (*what kind of napplet this is*)
 
-A NAAT is neither an interface nor a payload convention, just a name and a boundary.
-Archetypes are rows in the [ARCHETYPES.md](ARCHETYPES.md) registry, each linking
-to a thin file under [`naat/`](naat/). A napplet declares the roles it fulfills
-with a `["archetype", "<slug>", "<convention>"]` manifest tag, and napplets invoke
-each other by role through [NAP-INTENT](naps/NAP-INTENT.md). A napplet with no
-archetype tag is fully valid — it simply isn't invokable by role.
+A NAAT is neither an interface nor a payload convention, just a standardized
+name and boundary. Archetypes are rows in the
+[ARCHETYPES.md](ARCHETYPES.md) registry, each linking to a thin file under
+[`naat/`](naat/). A napplet advertises roles with `z` tags and accepted
+conventions with `i` tags, then napplets invoke each other by role through
+[NAP-INTENT](naps/NAP-INTENT.md). Publishers MAY invent unregistered roles; the
+registry standardizes shared meanings rather than acting as an allowlist. A
+napplet with no `z` tag is fully valid — it simply isn't invokable by role.
 
 ## Boundary rule
 
 A NAP is **runtime-provided** AND defines an **API surface**. A convention is
 **napplet-agreed** AND defines **message semantics**. An archetype (NAAT) is a
-**canonical role name** with a **boundary**, owning neither an API nor a payload.
+**standardized role name** with a **boundary**, owning neither an API nor a payload.
 Only runtime-provided API surfaces are NAPs.
 
 ## Governance
@@ -229,6 +234,6 @@ NIP-style informal process:
 
 ## References
 
-- Web projection: [projections/web.md](projections/web.md) — [NIP-5D](https://github.com/nostr-protocol/nips/pull/2303) (living, upstream document)
-- Napplet manifest / identity: [NIP-5A](https://github.com/nostr-protocol/nips/blob/master/5A.md)
+- Web napplet event / identity: [WEB-NAPPLET.md](WEB-NAPPLET.md)
+- Web projection: [projections/web.md](projections/web.md) — [NIP-5D](https://github.com/nostr-protocol/nips/pull/2303) (legacy upstream transport reference)
 - Archetype registry: [ARCHETYPES.md](ARCHETYPES.md)

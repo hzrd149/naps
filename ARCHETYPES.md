@@ -1,11 +1,11 @@
 NAAT: Napplet Archetypes
 ========================
 
-A **NAAT** (Nostr Applet ArcheType) is a shared *role* a napplet can fulfill — `note`, `feed`, `profile`, `pet`. It is the role axis of the napplet ecosystem, orthogonal to runtime-provided NAP interfaces:
+A **NAAT** (Nostr Applet ArcheType) is a standardized *role* a napplet can fulfill — `note`, `feed`, `profile`, `pet`. It is the role axis of the napplet ecosystem, orthogonal to runtime-provided NAP interfaces:
 
 - **NAP** — shell-provided API surfaces (`window.napplet.*`). *What the runtime offers.*
 - **Convention** — unnumbered `napplet:<archetype>/<intent>` payload shapes; an invocation MAY append `?params` as payload sugar. *What napplets say to each other.*
-- **NAAT** — canonical role identities. *What kind of napplet this is.*
+- **NAAT** — standardized role identities. *What kind of napplet this is.*
 
 A NAAT is deliberately **not** a NAP: it is neither an interface nor a payload convention. It is a name and a boundary.
 
@@ -13,11 +13,15 @@ This file is the **registry** — the index of every archetype. Each archetype's
 
 ## How a NAAT is used
 
-1. A napplet **declares the roles it fulfills** in its NIP-5A manifest:
+1. A web napplet **advertises the roles it fulfills** in its
+   [kind `35129` event](WEB-NAPPLET.md), separately from accepted conventions:
    ```
-   ["archetype", "note", "napplet:note/open"]      // role slug, then accepted convention(s)
+   ["z", "note"]
+   ["i", "napplet:note/open", "id", "relay"]
    ```
-   A napplet may declare several archetype tags. A napplet with **no** archetype tag is fully valid — it simply cannot be opened *by role*. "Weird" single-purpose napplets are first-class.
+   A napplet may advertise several roles. A napplet with **no** `z` tag is fully
+   valid — it simply cannot be opened *by role*. "Weird" single-purpose
+   napplets are first-class.
 
 2. A napplet **opens another by role** via [NAP-INTENT](naps/NAP-INTENT.md):
    ```js
@@ -29,11 +33,24 @@ This file is the **registry** — the index of every archetype. Each archetype's
    ```
    The runtime resolves the role to the user's **default** handler (like an OS "default app"), creates or focuses its window, and delivers the payload.
 
-3. The **slug** (`note`) is the role identifier used in the manifest tag and in the convention URI (`napplet:note/open`). The `NAAT-NOTE` id is a display/cross-reference label only, mirroring the `NAP-RELAY` / `relay` split.
+3. The **slug** (`note`) is the role identifier used in the `z` tag and in the
+   convention URI (`napplet:note/open`). The `NAAT-NOTE` id is a
+   display/cross-reference label only, mirroring the `NAP-RELAY` / `relay`
+   split.
 
 ## Archetype vs. convention
 
-A NAAT names a role and MAY recommend one convention as its default open contract — the answer to "what do I send to open this?" for the common case. It does **not** own the payload. New and richer wire shapes are ordinary conventions: napplets advertise the stable `napplet:<archetype>/<intent>` identities they accept, and callers choose one a handler reports via `available()`. Invocation query parameters become payload data and are never advertised. The recommendation is a convenience and an interop floor, not a mandate.
+A NAAT names a role and MAY recommend one convention as its default open
+contract — the answer to "what do I send to open this?" for the common case. It
+does **not** own the payload. New and richer wire shapes are ordinary
+conventions: napplets advertise stable `napplet:<archetype>/<intent>` identities
+and accepted shallow query parameter names in `i` tags, and callers choose one a
+handler reports via `available()`. Invocation query parameters become payload
+data. The recommendation is a convenience and an interop floor, not a mandate.
+
+Publishers MAY invent role slugs without registering a NAAT. Runtimes route
+registered and private roles by exact equality. Registration gives a role a
+shared definition and boundary; it is not permission to use the slug.
 
 ## Entry schema
 
@@ -48,7 +65,12 @@ Each archetype is one thin file in [`naat/`](naat/) in a fixed shape, so roles s
 
 ## Governance
 
-Same informal process as NAPs: open a PR that adds a row to the registry below **and** the matching `naat/<slug>.md` file. Slugs are first-come-first-served and must be approved by the maintainer (dskvr). A proposal is judged on whether its **Boundary** is genuinely disjoint from existing archetypes. Status is `draft` until at least one public implementation exists.
+Same informal process as NAPs: open a PR that adds a row to the registry below
+**and** the matching `naat/<slug>.md` file. Registered slugs are
+first-come-first-served and must be approved by the maintainer (dskvr). A
+proposal is judged on whether its **Boundary** is genuinely disjoint from
+existing standardized archetypes. Status is `draft` until at least one public
+implementation exists.
 
 ## Registry
 

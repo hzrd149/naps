@@ -11,9 +11,10 @@ then fan out via the links below. `CLAUDE.md` is a symlink to this file.
 | Path | What |
 |------|------|
 | [README.md](README.md) | Concepts, **glossary (canonical terms)**, NAP registry, archetype registry |
+| [WEB-NAPPLET.md](WEB-NAPPLET.md) | Normative web napplet kind `35129` event, artifact, and identity |
 | [naps/](naps/) | Runtime-provided NAP interface definitions — `NAP-<WORD>.md` |
 | [projections/](projections/) | The seam mapped to a host (e.g. [web](projections/web.md)) |
-| [NIP-5D](https://github.com/nostr-protocol/nips/pull/2303) | The web projection — **normative, living, upstream**. Link it; never mirror it here |
+| [NIP-5D](https://github.com/nostr-protocol/nips/pull/2303) | Legacy upstream reference for web loading, sandbox, namespace injection, and transport |
 | [ARCHETYPES.md](ARCHETYPES.md) + [naat/](naat/) | Archetype roles |
 | `*-TEMPLATE.md` | Start here for a new spec |
 
@@ -34,14 +35,15 @@ however useful it seems.
 |------|-----|------|-----------|
 | **NAP-WORD** | runtime-provided | an **API surface** | `shell.supports("<domain>")` |
 | **Convention** | napplet-agreed | **message semantics** | queryless `napplet:<archetype>/<intent>` identity in handler metadata |
-| **NAAT** | a **role name + boundary** | nothing (not a NAP); may advertise conventions | manifest `["archetype", …]` |
+| **NAAT** | a standardized **role name + boundary** | nothing (not a NAP); may recommend conventions | event `z` + `i` tags |
 | **Projection** | a host binding | how the seam maps to a host — **contracts are unchanged** | — |
 
 - A NAP is **runtime-provided AND an API** (NAP-WORD). Napplet-agreed message
   semantics are conventions, not NAPs.
 - Transport and host detail (`postMessage`, iframes, `window.napplet.*`) live in a
   **projection**, never in a NAP.
-- Manifests reference bare **domains** (`relay`), never spec ids (`NAP-RELAY`).
+- Web napplet events reference bare **domains** (`relay`) in `R` / `O` tags,
+  never spec ids (`NAP-RELAY`).
 - Cannot place a change cleanly on one side? **Stop and surface it.** Do not guess.
 
 ### Convention URI invariant
@@ -87,8 +89,8 @@ NAPs legitimately rest on other NAPs: a miner publishes through `relay`; an
 identity surface points its byte fields at `resource`. These edges are fine — but
 they MUST be **declared**, never left implicit in prose. Every NAP names its
 dependencies in a **`Depends:`** preamble block (alongside `NAP ID` / `Domain`),
-**by domain** — lined up with `shell.supports("<domain>")` and the manifest
-`["requires", …]` tag, never a bare spec id buried mid-paragraph. Each entry
+**by domain** — lined up with `shell.supports("<domain>")` and web napplet
+event `R` / `O` tags, never a bare spec id buried mid-paragraph. Each entry
 carries a **kind** and a **strength**:
 
     **Depends:**
@@ -166,9 +168,12 @@ add meaning beyond the domain name.
 
 One concern per branch, commit, and PR. Never tangle.
 
-- **Specs** (`naps/`, `naat/<slug>.md`) → branch + PR, **one spec per PR**.
+- **Specs** (`naps/`, `naat/<slug>.md`, `WEB-NAPPLET.md`) → branch + PR,
+  **one spec per PR**. A new event schema MAY update every direct reference in
+  the same migration PR; stale adjacent contracts are not a separate concern.
 - **Governance / meta** (README.md, ARCHETYPES.md, `*-TEMPLATE.md`, this file) →
-  committed **directly to `master`**.
+  committed **directly to `master`**, except required adjacent sync in a spec
+  migration PR.
 - Never mix a spec with a README rework, or two specs in one branch.
 - `.planning/` is local-only — never push.
 - Before claiming done: `git diff origin/master...<branch>` must show **only** the
@@ -183,6 +188,7 @@ One concern per branch, commit, and PR. Never tangle.
 | a **wire** dependency | both specs — owner defines the type, importer references it (never redefines) — plus each `Depends:` block |
 | an archetype | ARCHETYPES.md · `naat/<slug>.md` · README |
 | projection semantics | `projections/<host>.md` · README Projections table |
+| the web napplet event | README · ARCHETYPES · convention template · web projection · every direct manifest/identity reference |
 | terminology | README glossary, then all references |
 
 ## Changelog discipline

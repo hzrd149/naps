@@ -88,8 +88,9 @@ per napplet lifecycle.
 Key design notes:
 - `shell.ready` carries **no payload**. It is a liveness signal only — "my
   receiver is installed." It MUST NOT carry napplet identity or capability
-  claims; identity is assigned by the runtime at napplet creation (NIP-5A), not
-  asserted over this channel.
+  claims; identity is assigned by the runtime from the verified
+  [web napplet event](../WEB-NAPPLET.md) and artifact at creation, not asserted
+  over this channel.
 - `shell.init` is sent **exactly once** in response to the first `shell.ready`.
 - `shell.supports()` is answered **locally** from the cached `shell.init`
   environment. It is not a wire round-trip.
@@ -135,7 +136,8 @@ expressed by **absence**:
   in response to the signal, never speculatively before it).
 - The runtime MUST establish the napplet's session upon receiving the first
   `shell.ready`, binding it to the identity assigned at napplet creation
-  (NIP-5A) — never to anything carried in the message.
+  (`35129:<pubkey>:<d>` plus the artifact hash) — never to anything carried in
+  the message.
 - The runtime MUST send `shell.init` **exactly once** per napplet lifecycle.
 - The runtime's delivered capability set MUST be sufficient to answer
   `supports(domain)` truthfully for every capability it offers, and
@@ -151,7 +153,7 @@ expressed by **absence**:
 - `shell.ready` originates from **untrusted napplet content**. It is a bare
   liveness ping by design: it carries no identity, no capability request, and no
   payload the runtime could be tricked into trusting. A runtime MUST derive the
-  napplet's identity from creation-time assignment (NIP-5A), not from
+  napplet's identity from the verified web napplet event and artifact, not from
   the handshake channel.
 - Session establishment is a privileged side effect. Because a second
   `shell.ready` MUST NOT create a second session or mutate the first, a napplet

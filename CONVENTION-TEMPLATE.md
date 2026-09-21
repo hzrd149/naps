@@ -41,10 +41,13 @@ Napplets discover the stable, queryless convention identity through handler
 metadata, usually:
 
 ```
-["archetype", "{slug}", "napplet:{archetype}/{intent}"]
+["z", "{slug}"]
+["i", "napplet:{archetype}/{intent}", "{query-parameter}"]
 ```
 
-or through `intent.available()` candidate `conventions`.
+The `i` tag lists each accepted shallow query parameter after the convention
+identity. Napplets may also discover it through `intent.available()` candidate
+`conventions`.
 
 ## Implementations
 

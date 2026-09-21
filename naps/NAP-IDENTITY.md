@@ -18,7 +18,12 @@ NAP-IDENTITY provides read-only access to the shell-user identity: the currently
 
 Napplets do not have direct access to the user's private key. They cannot sign events, encrypt, or decrypt. Identity queries are strictly read-only -- napplets learn *about* the user but cannot act *as* the user. Signing is delegated to the shell via `relay.publish()` (NAP-RELAY). Encryption is delegated via `relay.publishEncrypted()`.
 
-This shell-user identity is distinct from the NIP-5D napplet session identity. The session identity is assigned by the shell at iframe creation from the NIP-5A `(dTag, aggregateHash)` / `MessageEvent.source` binding and is never negotiated by the napplet. NAP-IDENTITY only reports the user's connected signer identity.
+This shell-user identity is distinct from the web napplet session identity. The
+session identity is assigned by the shell at iframe creation from the verified
+`(35129:<pubkey>:<d>, artifactHash)` / `MessageEvent.source` binding defined by
+the [web napplet event](../WEB-NAPPLET.md) and web projection. It is never
+negotiated by the napplet. NAP-IDENTITY only reports the user's connected signer
+identity.
 
 ## API Surface
 
