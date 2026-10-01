@@ -28,29 +28,25 @@ render `content` and `title` as text, not markup.
 | Tag | Cardinality | Value |
 |-----|-------------|-------|
 | `d` | exactly 1 | Non-empty, opaque napplet identifier. |
-| `v` | exactly 1 | Schema version. This document defines `1`. |
 | `x` | exactly 1 | Lowercase hex SHA-256 of the HTML artifact bytes. |
 | `server` | 1+ | HTTPS Blossom origin holding the artifacts. |
 | `title` | exactly 1 | Non-empty plain-text title. |
 | `icon` | 0-1 | Icon SHA-256 followed by its media type. |
-| `clone` | 0+ | Cloneable Git remote. |
+| `source` | 0+ | Cloneable Git remote. |
 | `z` | 0+ | Role or archetype slug. |
 | `i` | 0+ | Accepted convention identity followed by parameter names. |
 | `R` | 0+ | NAP domain required for full functionality. |
 | `O` | 0+ | Optional NAP domain. |
 
-`d` is exact and case-sensitive. Clients MUST NOT normalize it. The schema tag
-is `["v", "1"]`. A runtime MUST reject an event with a missing, repeated, or
-unsupported `v` tag instead of inferring its schema from the other tags.
-The `d` value alone is not a napplet identity; it is scoped by kind and
-publisher pubkey.
+`d` is exact and case-sensitive. Clients MUST NOT normalize it. The `d` value
+alone is not a napplet identity; it is scoped by kind and publisher pubkey.
 
 Unknown tags MUST be ignored. A malformed optional metadata tag (`icon` or
-`clone`) MUST be ignored without invalidating an otherwise valid event.
+`source`) MUST be ignored without invalidating an otherwise valid event.
 Malformed `z`, `i`, `R`, or `O` tags MUST invalidate the event because silently
 dropping routing or capability declarations changes its behavior.
 
-`d`, `v`, `x`, `server`, `title`, `clone`, `z`, `R`, and `O` tags MUST contain
+`d`, `x`, `server`, `title`, `source`, `z`, `R`, and `O` tags MUST contain
 exactly two elements. `icon` MUST contain exactly three. `i` MUST contain at
 least two. Extra elements make a tag malformed unless its shape explicitly
 permits them.
@@ -63,12 +59,11 @@ Example:
   "content": "Displays and filters a chronological Nostr feed.",
   "tags": [
     ["d", "feed-reader"],
-    ["v", "1"],
     ["x", "186ea5fd14e88fd1ac49351759e7ab906fa94892002b60bf7f5a428f28ca1c99"],
     ["server", "https://blossom.example.com"],
     ["title", "Feed Reader"],
     ["icon", "0c1b82b9559f922f6f921fe4ba7fd4c3d8b406630978e0e408f55b15674f5d27", "image/png"],
-    ["clone", "nostr://<repository-reference>"],
+    ["source", "nostr://<repository-reference>"],
     ["z", "feed"],
     ["i", "napplet:feed/open", "filter", "relay"],
     ["R", "relay"],
@@ -103,7 +98,7 @@ Before execution, a runtime MUST:
 
 1. resolve the latest event for `35129:<pubkey>:<d>` under NIP-01,
 2. verify its event ID and signature,
-3. validate the required fields and schema version,
+3. validate its required fields and reject legacy markers,
 4. fetch and verify the HTML artifact, and
 5. bind the loaded frame to `(35129:<pubkey>:<d>, artifactHash)`.
 
@@ -130,13 +125,16 @@ malformed, unavailable, or unverifiable icon MUST NOT prevent the napplet from
 loading. The runtime MUST use a generic fallback and MUST NOT render unverified
 bytes.
 
-Each `clone` tag carries one remote suitable for `git clone`:
+Each `source` tag carries one remote suitable for `git clone`:
 
 ```json
-["clone", "<git-remote>"]
+["source", "<git-remote>"]
 ```
 
-Clone values MUST be absolute `https://`, `ssh://`, `git://`, or `nostr://`
+The tag name preserves compatibility with earlier napplet event shapes. This
+document narrows its value to a cloneable Git URL.
+
+`source` values MUST be absolute `https://`, `ssh://`, `git://`, or `nostr://`
 URLs. The `nostr://` repository references are defined by
 [NIP-34](https://github.com/nostr-protocol/nips/blob/master/34.md). Local paths,
 `file://` URLs, and scp-like remotes are not portable and are invalid. This is
@@ -158,10 +156,15 @@ napplet can use the domain when available. Values MAY name registry, future, or
 private domains. `shell` MAY be listed but is redundant for conformant runtimes.
 
 Repeated values are equivalent to one declaration. If a domain appears in both
-`R` and `O`, `R` wins. Neither tag grants a capability or widens runtime policy.
-A napplet MUST detect actual availability through the active projection before
-calling a domain. A runtime MAY load a napplet when one or more `R` domains are
-absent and need not attach special status or warning behavior.
+`R` and `O`, `R` wins. These tags are discovery metadata only. Neither tag
+grants a capability, widens runtime policy, or controls the domains exposed to
+the napplet.
+
+A runtime MUST NOT use `R` or `O` to gate loading, issue compatibility warnings,
+assign degraded status, or decide which APIs to inject. The shell determines
+exposure independently under its own policy. A napplet MUST detect actual
+availability through the active projection before calling a domain and MUST NOT
+infer availability from its event declarations.
 
 ### Filtering
 
@@ -169,16 +172,17 @@ Single-letter tags are indexed under NIP-01. Clients can use `#R`, `#O`, and the
 proposed [NIP-91](https://github.com/nostr-protocol/nips/pull/2252) `&R` operand
 for targeted discovery.
 
-NIP-91 does not express the compatibility test needed here. Given event
-requirements `E` and runtime capabilities `C`, compatibility requires `E` to be
-a subset of `C`. An `&R` filter for `C` instead asks for events containing every
-member of `C`. It can miss events with fewer requirements and return events with
-additional unsupported requirements.
+NIP-91 does not express the subset test needed to discover every napplet whose
+advertised requirements a runtime can support. Given event requirements `E` and
+runtime capabilities `C`, that discovery test is `E` being a subset of `C`. An
+`&R` filter for `C` instead asks for events containing every member of `C`. It
+can miss events with fewer requirements and return events with additional
+unsupported requirements.
 
-Clients MUST inspect the complete `R` set locally when testing compatibility for
-full functionality. When a client uses `&R`, NIP-91 also requires the same
-values in `#R` for relays without NIP-91 support and local post-filtering of
-returned events.
+Clients MUST inspect the complete `R` set locally when applying that discovery
+filter. This filtering result MUST NOT control loading or runtime API exposure.
+When a client uses `&R`, NIP-91 also requires the same values in `#R` for relays
+without NIP-91 support and local post-filtering of returned events.
 
 ## Roles And Conventions
 
@@ -216,13 +220,13 @@ Matching `i` tags advertise additional accepted actions and conventions.
 
 ## Legacy Events
 
-Earlier NIP-5D drafts used NIP-5A `path` tags and an aggregate `x`. A later
-unmerged draft used an artifact `x` with `C` capability tags. Both shapes are
-incompatible with schema version `1`.
+Earlier NIP-5D drafts used NIP-5A `path` tags, `requires` tags, and an aggregate
+`x`. A later unmerged draft used an artifact `x` with `C` capability tags. Both
+shapes are incompatible with this specification.
 
-A runtime implementing this document MUST NOT infer this schema from tag shape.
-An event without exactly one `["v", "1"]` tag is not a version 1 web napplet.
-Publishers must republish legacy events using this schema.
+A runtime MUST reject a kind `35129` event containing a `path`, `requires`, or
+`C` tag. It MUST NOT reinterpret or partially load those legacy shapes.
+Publishers must replace legacy addressable events with this schema.
 
 ## Security
 
@@ -231,7 +235,7 @@ Neither makes the publisher or artifact trustworthy. Runtimes MUST apply the
 NIP-5D sandbox and sender-binding rules, enforce their own capability policy,
 and verify every fetched artifact before use.
 
-Display fields, roles, conventions, capability declarations, clone remotes, and
+Display fields, roles, conventions, capability declarations, source remotes, and
 server origins are untrusted input. Clients MUST escape displayed text, MUST NOT
 execute source metadata, and MUST NOT treat event declarations as grants.
 

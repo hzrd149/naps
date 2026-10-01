@@ -106,8 +106,9 @@ shell.supports("relay")          // is the relay capability available?
 
 A web napplet declares domains needed for full functionality with `R` tags and
 optional integrations with `O` tags (`["R", "relay"]`, `["O", "theme"]`).
-These declarations do not grant access. The napplet still checks runtime
-availability before calling a domain.
+These tags are discovery metadata only. They do not gate loading, grant access,
+or determine which APIs the runtime exposes. The napplet still checks actual
+runtime availability before calling a domain.
 
 **Request / result.** Messages are objects with a `type` discriminant in
 `domain.action` form. Request/result pairs correlate by `id`; fire-and-forget
