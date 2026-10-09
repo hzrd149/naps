@@ -661,3 +661,5 @@ JSON wire envelope.
   directories as virtual paths with runtime-defined persistence.
 - `pending` - Defined base64 byte encoding, decoded-byte limits, schema tables,
   and `invalid-data` for malformed byte payloads.
+
+- `3ad611a` - Adopted injected-domain availability and linked the current upstream web binding.
