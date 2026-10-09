@@ -8,7 +8,8 @@ Virtual Filesystem Access
 
 **NAP ID:** NAP-FS
 **Domain:** `fs`
-**Web binding (NIP-5D):** `window.napplet.fs` · `shell.supports("fs")`
+**Depends:** none.
+**Web binding ([NIP-5D](https://github.com/nostr-protocol/nips/pull/2303)):** `window.napplet.fs`; domain presence signals availability.
 
 ## Description
 
@@ -430,7 +431,7 @@ indistinguishable from an unknown identifier.
 
 ## Wire Protocol
 
-`fs.*` messages use the NIP-5D wire format (`{ "type": "domain.action", ...payload }`).
+`fs.*` messages use the [NIP-5D](https://github.com/nostr-protocol/nips/pull/2303) wire format (`{ "type": "domain.action", ...payload }`).
 
 | Type | Direction | Payload fields |
 |------|-----------|----------------|
