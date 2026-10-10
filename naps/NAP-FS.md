@@ -356,7 +356,8 @@ is unspecified. Listing a file MUST fail with `not-a-directory`.
 **`read(path, options?)`** — Reads bytes from a file. Range reads are mandatory.
 `offset` defaults to `0`. `length` defaults to the runtime's maximum readable
 chunk. `length` counts decoded bytes and MUST NOT exceed
-`FsLimits.maxReadBytes`. The runtime MAY return fewer bytes than requested.
+`FsLimits.maxReadBytes`. The runtime MAY return fewer bytes than requested but,
+for a non-zero `length`, MUST return at least one byte or set `eof: true`.
 `eof: true` means no more bytes are available after this result. Reading a
 directory MUST fail with `not-a-file`.
 
